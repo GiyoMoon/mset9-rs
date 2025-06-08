@@ -1,6 +1,6 @@
+use ::console::Term;
 use checks::run_checks;
 use sdcard::SdCard;
-use std::path::Path;
 
 mod checks;
 mod console;
@@ -10,9 +10,7 @@ mod sdcard;
 mod term;
 
 fn main() {
-    // TODO: Replace for testing purposes
-    // let script_path = std::env::current_exe().unwrap();
-    let script_path = Path::new("/Volumes/MSET9/mset9.py");
+    let script_path = std::env::current_exe().unwrap();
     let sd_root = script_path.parent().unwrap();
 
     let fs_check_result = run_checks(sd_root);
@@ -21,7 +19,7 @@ fn main() {
         return;
     }
 
-    let sd_card_result = SdCard::setup(sd_root);
+    let sd_card_result = SdCard::setup(sd_root.to_str().unwrap().to_string());
     let sd_card = match sd_card_result {
         Ok(sdcard) => sdcard,
         Err(e) => {
@@ -39,4 +37,8 @@ fn main() {
     if let Err(e) = cleanup_result {
         e.report();
     }
+
+    let term = Term::stdout();
+    term.write_line("=== Press any key to exit").unwrap();
+    term.read_key().unwrap();
 }

@@ -2,7 +2,7 @@
 
 [MSET9](https://github.com/zoogie/MSET9) ported to Rust with the goal of easier use (single binary, no need to install Python).
 
-> This is a WIP, there are no proper releases yet and it currently only works on MacOS.
+> This is a WIP, there are no proper releases yet and it currently only works on Windows and MacOS.
 
 ## Thanks
 - zoogie for MSET9

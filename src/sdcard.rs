@@ -2,13 +2,18 @@ use std::{
     fs::{self, File},
     io::Write,
     path::Path,
-    process::Command,
 };
 
+#[cfg(target_os = "macos")]
+use crate::term::info;
+#[cfg(target_os = "macos")]
 use fatfs::{FileSystem, FsOptions};
+#[cfg(target_os = "macos")]
 use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "macos")]
+use std::process::Command;
 
-use crate::{error::MSET9Error, term::info};
+use crate::error::MSET9Error;
 
 pub struct DirEntry {
     pub file_name: String,
@@ -20,11 +25,14 @@ pub struct SdCard {
     fs: fatfs::FileSystem<std::fs::File>,
     #[cfg(target_os = "macos")]
     disk: String,
+    #[cfg(not(target_os = "macos"))]
+    sd_root: String,
 }
 
 #[cfg(target_os = "macos")]
 impl SdCard {
-    pub fn setup(sd_root: &Path) -> Result<Self, MSET9Error> {
+    pub fn setup(sd_root: String) -> Result<Self, MSET9Error> {
+        let sd_root = Path::new(&sd_root);
         let script_dev = fs::metadata(sd_root).unwrap().dev();
 
         let device = fs::read_dir("/dev").unwrap().find_map(|disk| {
@@ -159,7 +167,7 @@ impl SdCard {
     }
 
     pub fn cleanup(&self) -> Result<(), MSET9Error> {
-        info("Mounting SD card again...")?;
+        info("Remounting SD card...")?;
         Command::new("diskutil")
             .arg("mountDisk")
             .arg(&self.disk)
@@ -174,7 +182,77 @@ impl SdCard {
 
 #[cfg(not(target_os = "macos"))]
 impl SdCard {
-    pub fn new() -> Self {
-        SdCard {}
+    fn root_path(&self) -> &Path {
+        Path::new(&self.sd_root)
+    }
+
+    pub fn setup(sd_root: String) -> Result<Self, MSET9Error> {
+        Ok(SdCard { sd_root })
+    }
+
+    pub fn read_dir(&self, path: &str) -> Result<impl Iterator<Item = DirEntry>, MSET9Error> {
+        let full_path = self.root_path().join(path);
+        let entries = fs::read_dir(full_path)?.map(|entry| {
+            let entry = entry.unwrap();
+            DirEntry {
+                file_name: entry.file_name().to_string_lossy().into_owned(),
+                is_dir: entry.file_type().unwrap().is_dir(),
+            }
+        });
+        Ok(entries)
+    }
+
+    pub fn rename(&self, src: &str, dst: &str) -> Result<(), MSET9Error> {
+        let src_path = self.root_path().join(src);
+        let dst_path = self.root_path().join(dst);
+        fs::rename(src_path, dst_path)?;
+        Ok(())
+    }
+
+    pub fn create_dir(&self, path: &str) -> Result<(), MSET9Error> {
+        let full_path = self.root_path().join(path);
+        fs::create_dir_all(full_path)?;
+        Ok(())
+    }
+
+    pub fn create_file(&self, path: &str, content: Option<&str>) -> Result<(), MSET9Error> {
+        let full_path = self.root_path().join(path);
+        let mut file = File::create(full_path)?;
+        if let Some(content) = content {
+            file.write_all(content.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    pub fn remove(&self, path: &str) -> Result<(), MSET9Error> {
+        let full_path = self.root_path().join(path);
+        fs::remove_file(full_path)?;
+        Ok(())
+    }
+
+    pub fn get_file_size(&self, path: &str) -> Result<u64, MSET9Error> {
+        let full_path = self.root_path().join(path);
+        let metadata = fs::metadata(full_path)?;
+        Ok(metadata.len())
+    }
+
+    pub fn remove_tree(&self, path: &str) -> Result<(), MSET9Error> {
+        let full_path = self.root_path().join(path);
+        fs::remove_dir_all(full_path)?;
+        Ok(())
+    }
+
+    pub fn file_exists(&self, path: &str) -> Result<bool, MSET9Error> {
+        let full_path = self.root_path().join(path);
+        Ok(full_path.exists() && full_path.is_file())
+    }
+
+    pub fn dir_exists(&self, path: &str) -> Result<bool, MSET9Error> {
+        let full_path = self.root_path().join(path);
+        Ok(full_path.exists() && full_path.is_dir())
+    }
+
+    pub fn cleanup(&self) -> Result<(), MSET9Error> {
+        Ok(())
     }
 }

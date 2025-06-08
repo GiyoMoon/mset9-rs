@@ -162,38 +162,6 @@ pub fn launch(sd_card: &SdCard) -> Result<(), MSET9Error> {
         ));
     }
 
-    // TODO: DEBUG
-    // let hacked_id1 = console.encoded_id1_readable();
-    // let mut has_hacked_id1 = false;
-    // for entry in sd_card.read_dir(&format!("Nintendo 3DS/{id0}"))? {
-    //     println!("[DEBUG] Folder in id0: {}", entry.file_name);
-    //     if entry.file_name == hacked_id1 {
-    //         has_hacked_id1 = true;
-    //     }
-    // }
-    // let mut has_dbs = false;
-    // if has_hacked_id1 {
-    //     for entry in sd_card.read_dir(&format!("Nintendo 3DS/{id0}/{hacked_id1}"))? {
-    //         if entry.file_name == "dbs" {
-    //             has_dbs = true;
-    //         }
-    //         println!("[DEBUG] Folder in hacked_id1: {}", entry.file_name);
-    //     }
-    // }
-    // if has_dbs {
-    //     for entry in sd_card.read_dir(&format!("Nintendo 3DS/{id0}/{hacked_id1}/dbs"))? {
-    //         println!("[DEBUG] Folder in dbs: {}", entry.file_name);
-    //     }
-    // }
-
-    // TODO: DEBUG
-    // info("Cleaning up...")?;
-    // if has_hacked_id1 {
-    //     sd_card.remove_tree(&format!("Nintendo 3DS/{id0}/{hacked_id1}"))?;
-    // }
-
-    // return Ok(());
-
     mainmenu(
         sd_card,
         &id0,
@@ -322,12 +290,10 @@ fn create_hax_id1(
 
     if choice == 0 {
         term.write_line("Cancelled!")?;
-        term.write_line("=== Press any key to exit").unwrap();
-        term.read_key().unwrap();
         return Ok(());
     }
 
-    // TODO: Handle errors here more gracefully.
+    // TODO: Handle create errors here more gracefully.
 
     info("Creating hacked ID1...")?;
 

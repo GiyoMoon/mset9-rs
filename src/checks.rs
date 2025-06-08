@@ -1,14 +1,11 @@
-use std::{
-    fs::{self, File},
-    path::Path,
-};
+use std::{fs::File, path::Path};
 
 use sysinfo::Disks;
 
 #[cfg(unix)]
+use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
-#[cfg(windows)]
-use std::os::windows::fs::MetadataExt;
 
 use crate::error::MSET9Error;
 
@@ -39,11 +36,14 @@ pub fn run_checks(sd_root: &Path) -> Result<(), MSET9Error> {
 }
 
 pub fn check_sd_card(sd_root: &Path) -> Result<(), MSET9Error> {
+    #[cfg(not(target_os = "windows"))]
     let script_dev = fs::metadata(sd_root)?.dev();
-    #[cfg(unix)]
+    #[cfg(not(target_os = "windows"))]
     let boot_dev = fs::metadata("/")?.dev();
-    #[cfg(windows)]
-    let boot_dev = fs::metadata("C:\\")?.dev();
+    #[cfg(target_os = "windows")]
+    let script_dev = get_volume_serial(sd_root.to_str().unwrap())?;
+    #[cfg(target_os = "windows")]
+    let boot_dev = get_volume_serial("C:\\")?;
 
     if script_dev == boot_dev {
         return Err(MSET9Error::UserError(
@@ -56,6 +56,46 @@ pub fn check_sd_card(sd_root: &Path) -> Result<(), MSET9Error> {
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn get_volume_serial(path: &str) -> Result<u32, MSET9Error> {
+    use std::{ffi::OsStr, io, mem, os::windows::ffi::OsStrExt, ptr};
+    use windows_sys::Win32::{
+        Foundation::{HANDLE, INVALID_HANDLE_VALUE},
+        Storage::FileSystem::{
+            BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_GENERIC_READ,
+            FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
+            OPEN_EXISTING,
+        },
+    };
+
+    let wide_path: Vec<u16> = OsStr::new(path).encode_wide().chain(Some(0)).collect();
+
+    let handle: HANDLE = unsafe {
+        CreateFileW(
+            wide_path.as_ptr(),
+            FILE_GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            ptr::null_mut(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            std::ptr::null_mut(),
+        )
+    };
+
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { mem::zeroed() };
+    let ret = unsafe { GetFileInformationByHandle(handle, &mut info) };
+
+    if ret == 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    Ok(info.dwVolumeSerialNumber)
 }
 
 pub fn check_root(sd_root: &Path) -> Result<(), MSET9Error> {
@@ -94,7 +134,10 @@ pub fn check_free_space(path: &Path, required_bytes: u64) -> Result<(), MSET9Err
     let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     for disk in disks.list() {
-        let mount_point = disk.mount_point();
+        let mount_point = disk
+            .mount_point()
+            .canonicalize()
+            .unwrap_or_else(|_| path.to_path_buf());
 
         if path == mount_point {
             let available = disk.available_space();
